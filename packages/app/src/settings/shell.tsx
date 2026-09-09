@@ -244,7 +244,7 @@ function RootSettings() {
             ],
           },
         ]),
-    { items: trailingTabs.map((item) => ({ ...item, label: language.t(item.label) })) },
+    ...trailingTabs.map((items) => ({ items: items.map((item) => ({ ...item, label: language.t(item.label) })) })),
   ])
 
   createEffect(() => {
