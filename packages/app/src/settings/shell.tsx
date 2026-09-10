@@ -23,6 +23,7 @@ import { SettingsModels } from "./models/models"
 import { SettingsServerGeneral } from "./servers/servers"
 import { useSettingsServers, type SettingsServer } from "./servers/inventory"
 import { SettingsWorkspaces } from "./workspaces/workspaces"
+import { useWorkspacesPrefetch } from "./workspaces/queries"
 import { SettingsProjects } from "./workspaces/projects"
 import { SettingsExtensions } from "./providers/extensions"
 import { SettingsAbout } from "./about/about"
@@ -158,6 +159,7 @@ function RootSettings() {
   const list = servers.collection.items
   const singleEntry = createMemo(() => (inventory().length === 1 ? inventory()[0] : undefined))
   const single = createMemo(() => singleEntry()?.connection)
+  const prefetchWorkspaces = useWorkspacesPrefetch(single)
   const multiple = createMemo(() => inventory().length > 1)
   const ordered = createMemo(() => {
     const order = new Map(list().map((server, index) => [ServerConnection.key(server), index]))
@@ -198,7 +200,12 @@ function RootSettings() {
       : [
           {
             items: [
-              ...serverTabs.map((item) => ({ ...item, label: language.t(item.label), disabled: !single() })),
+              ...serverTabs.map((item) => ({
+                ...item,
+                label: language.t(item.label),
+                disabled: !single(),
+                onPrefetch: item.value === "workspaces" ? prefetchWorkspaces : undefined,
+              })),
               { value: "servers", icon: "server" as const, label: language.t("settings.section.server") },
             ],
           },
@@ -296,6 +303,7 @@ function ServerSettings(props: { entry: SettingsServer }) {
   const language = useLanguage()
   const surface = useSettingsSurface()
   const activeDirectory = useSettingsDirectory(() => props.entry.connection)
+  const prefetchWorkspaces = useWorkspacesPrefetch(() => props.entry.connection)
   const [state, setState] = createStore({ worktreeFilterReset: 0 })
   const groups = createMemo<SettingsNavGroup[]>(() => [
     {
@@ -303,6 +311,7 @@ function ServerSettings(props: { entry: SettingsServer }) {
         ...item,
         label: item.value === "general" ? props.entry.name : language.t(item.label),
         disabled: item.value !== "general" && !props.entry.connection,
+        onPrefetch: item.value === "workspaces" ? prefetchWorkspaces : undefined,
       })),
     },
   ])
@@ -369,10 +378,15 @@ function ProjectSettings(props: { server: ServerConnection.Any; project: LocalPr
   const language = useLanguage()
   const surface = useSettingsSurface()
   const activeDirectory = useSettingsDirectory(() => props.server)
+  const prefetchWorkspaces = useWorkspacesPrefetch(
+    () => props.server,
+    () => props.project.id,
+  )
   const groups: SettingsNavGroup[] = [
     {
       items: nestedProjectTabs.map((item) => ({
         ...item,
+        onPrefetch: item.value === "workspaces" ? prefetchWorkspaces : undefined,
         get label() {
           return item.value === "general" ? displayName(props.project) : language.t(item.label)
         },

@@ -9,6 +9,7 @@ export type SettingsNavItem = {
   label: string
   icon: ComponentProps<typeof Icon>["name"]
   disabled?: boolean
+  onPrefetch?: () => void
 }
 
 export type SettingsNavGroup = {
@@ -53,7 +54,16 @@ export function SettingsNavigation(props: {
                         </Show>
                         <For each={group.items}>
                           {(item) => (
-                            <Menu.RadioItem value={item.value} disabled={item.disabled} closeOnSelect>
+                            <Menu.RadioItem
+                              value={item.value}
+                              disabled={item.disabled}
+                              closeOnSelect
+                              onPointerEnter={(event: PointerEvent) => {
+                                if (item.disabled || event.pointerType === "touch") return
+                                item.onPrefetch?.()
+                              }}
+                              onFocus={() => !item.disabled && item.onPrefetch?.()}
+                            >
                               <Icon name={item.icon} />
                               {item.label}
                             </Menu.RadioItem>
@@ -86,7 +96,15 @@ export function SettingsNavigation(props: {
                   </Show>
                   <For each={group.items}>
                     {(item) => (
-                      <Tabs.Trigger value={item.value} disabled={item.disabled}>
+                      <Tabs.Trigger
+                        value={item.value}
+                        disabled={item.disabled}
+                        onPointerEnter={(event: PointerEvent) => {
+                          if (item.disabled || event.pointerType === "touch") return
+                          item.onPrefetch?.()
+                        }}
+                        onFocus={() => !item.disabled && item.onPrefetch?.()}
+                      >
                         <Icon name={item.icon} />
                         {item.label}
                       </Tabs.Trigger>
