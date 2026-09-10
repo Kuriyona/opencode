@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { ConfigProvider, Effect } from "effect"
+import { ConfigProvider, Effect, Schema } from "effect"
 import { Headers } from "effect/unstable/http"
 import { Auth, LLM, LLMClient } from "../../src/index.js"
 import { Meta } from "../../src/providers/index.js"
@@ -8,7 +8,7 @@ import { OpenResponses } from "../../src/protocols/open-responses.js"
 import { MetaResponses } from "../../src/protocols/meta-responses.js"
 import { compileRequest } from "../../src/route/client.js"
 import { it } from "../lib/effect.js"
-import { dynamicResponse } from "../lib/http.js"
+import { dynamicResponse, fixedResponse } from "../lib/http.js"
 import { sseEvents } from "../lib/sse.js"
 
 it.effect("Meta composes baseline protocols with provider-owned endpoints and defaults", () =>
@@ -17,7 +17,7 @@ it.effect("Meta composes baseline protocols with provider-owned endpoints and de
     const responses = meta.model("muse-spark-1.3")
     const chat = meta.chat("muse-spark-1.3")
     expect(responses.route.body).toBe(MetaResponses.protocol.body)
-    expect(MetaResponses.protocol.stream.event).toBe(OpenResponses.protocol.stream.event)
+    expect(MetaResponses.protocol.stream.event).not.toBe(OpenResponses.protocol.stream.event)
     expect(chat.route.body).toBe(OpenAIChat.protocol.body)
     expect(meta.model).toBe(meta.responses)
     for (const model of [responses, chat]) {
@@ -76,6 +76,63 @@ it.effect("Meta Responses stays on HTTP when a WebSocket executor is supplied", 
       expect(response.text).toBe("Hello")
       expect(response.finishReason.normalized).toBe("stop")
     }
+  }),
+)
+
+it.effect("Meta normalizes flat streaming errors before shared parsing", () =>
+  Effect.gen(function* () {
+    const frame = {
+      type: "error",
+      sequence_number: 4,
+      code: "server_shutting_down",
+      message: "Server is shutting down. Please retry your request.",
+      param: null,
+    }
+    const event = yield* Schema.decodeUnknownEffect(MetaResponses.protocol.stream.event)(JSON.stringify(frame))
+    expect(event).toEqual({
+      type: "error",
+      sequence_number: 4,
+      error: {
+        code: "server_shutting_down",
+        message: frame.message,
+        param: null,
+      },
+    })
+    expect(yield* Schema.decodeUnknownEffect(OpenResponses.protocol.stream.event)(JSON.stringify(frame))).toEqual(frame)
+
+    for (const unchanged of [
+      event,
+      { type: "error" },
+      {
+        type: "response.failed",
+        response: { id: "resp_failed", error: { code: "server_error", message: "Internal server error" } },
+      },
+      { type: "response.output_text.delta", item_id: "msg_text", delta: "Hello" },
+    ]) {
+      expect(yield* Schema.decodeUnknownEffect(MetaResponses.protocol.stream.event)(JSON.stringify(unchanged))).toEqual(
+        unchanged,
+      )
+    }
+  }),
+)
+
+it.effect("Meta normalized errors retain their classification and original wire body", () =>
+  Effect.gen(function* () {
+    const raw = `{
+  "type": "error",
+  "sequence_number": 4,
+  "code": "server_shutting_down",
+  "message": "Server is shutting down. Please retry your request.",
+  "param": null,
+  "diagnostic": "retain-original-frame"
+}`
+    const error = yield* LLMClient.generate(
+      LLM.request({ model: Meta.configure({ apiKey: "fixture" }).responses("muse-spark-1.3"), prompt: "Hello" }),
+    ).pipe(Effect.provide(fixedResponse(sseEvents(raw.replaceAll("\n", "\ndata: ")))), Effect.flip)
+    expect(error.reason._tag).toBe("ProviderInternal")
+    expect(error.message).toBe("server_shutting_down: Server is shutting down. Please retry your request.")
+    expect(error.reason.body).toBe(raw)
+    expect(error.reason.http?.status).toBe(200)
   }),
 )
 

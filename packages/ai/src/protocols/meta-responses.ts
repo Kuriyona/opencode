@@ -1,4 +1,4 @@
-import { Effect, Encoding, Schema } from "effect"
+import { Effect, Encoding, Schema, SchemaGetter } from "effect"
 import { Protocol } from "../route/protocol.js"
 import { HttpTransport } from "../route/transport/index.js"
 import { LLMEvent, LLMRequest, Message, ToolResultPart } from "../schema/index.js"
@@ -51,6 +51,19 @@ const Body = Schema.Struct({
   tools: optionalArray(Schema.Union([OpenResponses.Tool, NativeTool])),
   stream: Schema.Literal(true),
 })
+
+const Event = OpenResponses.Event.pipe(
+  Schema.decode({
+    decode: SchemaGetter.transform((event) => {
+      if (event.type !== "error" || event.error != null) return event
+      const { code, message, param, ...rest } = event
+      if (code === undefined && message === undefined && param === undefined) return event
+      // Meta's stream-interrupting errors put these fields at the top level instead of in `error`.
+      return { ...rest, error: { code, message, param } }
+    }),
+    encode: SchemaGetter.passthrough(),
+  }),
+)
 
 const MessageAnnotations = Schema.Struct({
   content: Schema.Array(Schema.Struct({ annotations: optionalArray(JsonObject) })),
@@ -226,7 +239,7 @@ export const protocol = Protocol.make({
   id: ADAPTER,
   body: { schema: Body, from: fromRequest },
   stream: {
-    event: OpenResponses.protocol.stream.event,
+    event: Protocol.jsonEvent(Event),
     initial: (request): ParserState => ({ ...OpenResponses.initial(request, adapter), completedItems: new Set() }),
     step,
     terminal: OpenResponses.terminal,
