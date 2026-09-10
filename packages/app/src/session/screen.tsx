@@ -34,6 +34,7 @@ import { SessionIdentityHeader } from "./session-identity-header"
 import { SessionReviewToggle } from "./header/session-header-actions"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
 import { createSessionBrowser } from "./browser/model"
+import { createTimelineCache } from "./timeline/cache"
 
 const SessionMobileFiles = lazy(async () => {
   const { SessionMobileFiles } = await import("./files/session-mobile-files")
@@ -61,6 +62,8 @@ export function SessionScreen(props: { session: SessionModel }) {
   const [store, setStore] = createStore({
     deferRender: false,
     bottomTerminalCached: false,
+    sideWidthMotion: false,
+    timelineScrollbarHidden: false,
     sideHeightMotion: false,
     sideRegionPresent: false,
     sideReviewPresent: false,
@@ -109,6 +112,16 @@ export function SessionScreen(props: { session: SessionModel }) {
     sideMotion().animateRegion ||
     sideMotion().animateTerminal ||
     bottomTerminalPresence.animate()
+  const trackSideWidthMotion = (event: TransitionEvent) => {
+    if (event.currentTarget !== event.target || event.propertyName !== "width") return
+    setStore("sideWidthMotion", event.type === "transitionrun")
+  }
+  const hideTimelineScrollbar = () => setStore("timelineScrollbarHidden", true)
+  const revealTimelineScrollbar = (event: Event) => {
+    if (!store.timelineScrollbarHidden || store.sideWidthMotion) return
+    if (!(event.target instanceof Element) || !event.target.closest('[data-slot="session-timeline-scroll"]')) return
+    setStore("timelineScrollbarHidden", false)
+  }
   createEffect(() => {
     if (sideTerminalVisible()) setStore("sideTerminalPresent", true)
     if (bottomTerminalVisible()) setStore("bottomTerminalCached", true)
@@ -207,6 +220,45 @@ export function SessionScreen(props: { session: SessionModel }) {
     </Show>
   )
 
+  const timelineView = createTimelineCache(
+    session,
+    (source, active) => (
+      <MessageTimeline
+        active={active()}
+        hideHeader={!isDesktop()}
+        session={source}
+        background={composer.requests.background}
+        actions={composer.actions.timeline}
+        scroll={timeline.scroll}
+        onResumeScroll={timeline.actions.resume}
+        setScrollRef={timeline.view.setScrollRef}
+        onScheduleScrollState={timeline.view.scheduleScrollState}
+        onPin={timeline.view.pin}
+        onUnpin={timeline.view.unpin}
+        onUserScroll={timeline.view.markUserScroll}
+        onHistoryScroll={timeline.view.onHistoryScroll}
+        onSelectionInteraction={timeline.view.selectionInteraction}
+        pinned={timeline.view.pinned()}
+        centered={screen.centered()}
+        reserveReviewToggle={!sideVisible()}
+        setContentRef={timeline.view.setContentRef}
+        diffs={review.details.diffs}
+        onReview={review.open}
+        workspaceMoveEligible={composer.workspaceMoveEligible()}
+        onSummaryOpenChange={review.details.setOpen}
+        anchor={timeline.view.anchor}
+        setRevealMessage={timeline.view.setRevealMessage}
+        setScrollToEnd={timeline.view.setScrollToEnd}
+        search={
+          <Show when={active()}>
+            <TimelineSearchBar controller={timelineSearch} />
+          </Show>
+        }
+      />
+    ),
+    () => conversationVisible() && messagesReady(),
+  )
+
   const sessionPanelContent = () => (
     <>
       <ComposerDropzone
@@ -246,36 +298,7 @@ export function SessionScreen(props: { session: SessionModel }) {
             <Show when={isDesktop() && !messagesReady()}>
               <SessionIdentityHeader sessionID={session.identity.params.id ?? ""} session={session.data.info()} />
             </Show>
-            <Show when={messagesReady() ? session.identity.params.id : undefined} keyed>
-              {(_id) => (
-                <MessageTimeline
-                  hideHeader={!isDesktop()}
-                  session={session}
-                  background={composer.requests.background}
-                  actions={composer.actions.timeline}
-                  scroll={timeline.scroll}
-                  onResumeScroll={timeline.actions.resume}
-                  setScrollRef={timeline.view.setScrollRef}
-                  onScheduleScrollState={timeline.view.scheduleScrollState}
-                  onPin={timeline.view.pin}
-                  onUnpin={timeline.view.unpin}
-                  onUserScroll={timeline.view.markUserScroll}
-                  onHistoryScroll={timeline.view.onHistoryScroll}
-                  onSelectionInteraction={timeline.view.selectionInteraction}
-                  pinned={timeline.view.pinned()}
-                  centered={screen.centered()}
-                  setContentRef={timeline.view.setContentRef}
-                  diffs={review.details.diffs}
-                  onReview={review.open}
-                  workspaceMoveEligible={composer.workspaceMoveEligible()}
-                  onSummaryOpenChange={review.details.setOpen}
-                  anchor={timeline.view.anchor}
-                  setRevealMessage={timeline.view.setRevealMessage}
-                  setScrollToEnd={timeline.view.setScrollToEnd}
-                  search={<TimelineSearchBar controller={timelineSearch} />}
-                />
-              )}
-            </Show>
+            <Show when={messagesReady() && session.identity.params.id}>{timelineView()}</Show>
           </Match>
         </Switch>
       </div>
@@ -296,6 +319,8 @@ export function SessionScreen(props: { session: SessionModel }) {
               class="absolute end-3 top-0 z-30 flex items-center"
               classList={{ "h-[51px]": sideTerminalVisible(), "h-12": !sideTerminalVisible() }}
               data-slot="session-review-toggle"
+              onPointerDown={hideTimelineScrollbar}
+              onClick={hideTimelineScrollbar}
             >
               <SessionReviewToggle />
             </div>
@@ -303,11 +328,20 @@ export function SessionScreen(props: { session: SessionModel }) {
           <div
             classList={{
               "@container relative z-10 min-w-0 shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
-              "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+              "duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[width] motion-reduce:transition-none":
                 !screen.size.active() && sidePresence.animate(),
               "transition-none": screen.size.active() || !sidePresence.animate(),
             }}
             data-slot="session-chat-panel"
+            data-width-animating={store.sideWidthMotion}
+            data-scrollbar-hidden={store.timelineScrollbarHidden || store.sideWidthMotion}
+            onPointerMove={revealTimelineScrollbar}
+            onPointerDown={revealTimelineScrollbar}
+            onWheel={revealTimelineScrollbar}
+            onKeyDown={revealTimelineScrollbar}
+            onTransitionRun={trackSideWidthMotion}
+            onTransitionEnd={trackSideWidthMotion}
+            onTransitionCancel={trackSideWidthMotion}
             style={{
               width: screen.panel.width(),
             }}
@@ -342,7 +376,7 @@ export function SessionScreen(props: { session: SessionModel }) {
               data-opened={sidePresence.animate() ? sidePresence.show() : undefined}
               onAnimationEnd={(event) => {
                 if (event.currentTarget !== event.target) return
-                if (event.animationName !== "terminal-panel-presence-in" || !sideVisible()) return
+                if (event.animationName !== "side-region-presence-in" || !sideVisible()) return
                 setStore("sideHeightMotion", true)
               }}
               classList={{
@@ -353,8 +387,8 @@ export function SessionScreen(props: { session: SessionModel }) {
             >
               <div
                 data-slot="session-side-panel-content"
-                class="absolute inset-y-0 start-0 h-full"
-                style={{ width: screen.side.contentWidth() }}
+                class="absolute inset-y-0 start-0 size-full"
+                style={{ "--session-side-content-width": screen.side.contentWidth() }}
               >
                 <div
                   data-slot="session-side-region"
@@ -363,7 +397,7 @@ export function SessionScreen(props: { session: SessionModel }) {
                     "will-change-[height]": !screen.size.active() && store.sideHeightMotion && paneAnimating(),
                     "transition-none": screen.size.active() || !store.sideHeightMotion || !paneAnimating(),
                   }}
-                  style={{ height: screen.side.region.height() }}
+                  style={{ height: sideVisible() ? screen.side.region.height() : "100%" }}
                 >
                   <Show when={store.sideRegionPresent}>
                     <div
@@ -383,7 +417,7 @@ export function SessionScreen(props: { session: SessionModel }) {
                     </div>
                   </Show>
                 </div>
-                <div class="absolute inset-x-0 bottom-0 flex flex-col">
+                <div class="absolute start-0 bottom-0 flex flex-col" style={{ width: screen.side.contentWidth() }}>
                   <div
                     data-slot="session-side-panel-gap"
                     classList={{

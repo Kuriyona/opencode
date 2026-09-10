@@ -169,7 +169,12 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
           : members.some((id) => (data.session.form.list(id)?.length ?? 0) > 0)
             ? ("question" as const)
             : (false as const),
-        busy: members.some((id) => data.session.status(id) === "running" || data.session.pending.list(id).length > 0),
+        // Parked synthetic context (user shells, plan reminders) stays pending without execution; only work counts as busy.
+        busy: members.some(
+          (id) =>
+            data.session.status(id) === "running" ||
+            data.session.pending.list(id).some((item) => item.type !== "synthetic"),
+        ),
         renaming: data.session.title.pending(session),
       }
     }
@@ -394,6 +399,15 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
       select(sessionID: string) {
         if (!enabled()) return
         route.navigate({ type: "session", sessionID: root(sessionID) })
+      },
+      open(sessionID: string) {
+        if (!enabled()) return
+        const session = root(sessionID)
+        if (state().tabs.some((tab) => tab.sessionID === session)) return
+        cancelledTabs.delete(session)
+        update((draft) => {
+          draft.tabs = openSessionTab(draft.tabs, { sessionID: session, title: title(session) })
+        })
       },
       promote(sessionID: string) {
         if (!enabled()) return

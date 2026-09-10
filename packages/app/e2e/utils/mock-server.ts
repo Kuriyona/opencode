@@ -83,6 +83,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
         const id = state.connections
         let ended = false
         let own: ReadableStreamDefaultController<Uint8Array> | undefined
+        let keepalive: ReturnType<typeof setInterval> | undefined
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             own = controller
@@ -92,11 +93,15 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
               encoder.encode(frame({ id: `evt_mock_connected_${id}`, type: "server.connected", data: {} })),
             )
             state.buffer.splice(0).forEach((item) => controller.enqueue(encoder.encode(item)))
+            // Match the real server's idle stream so long scenarios do not
+            // trigger the client's 45-second stall watchdog and reload history.
+            keepalive = setInterval(() => controller.enqueue(encoder.encode(": keepalive\n\n")), 15_000)
             request.signal.addEventListener(
               "abort",
               () => {
                 if (ended) return
                 ended = true
+                clearInterval(keepalive)
                 if (state.controller === controller) state.controller = undefined
                 controller.error(request.signal.reason ?? new DOMException("The operation was aborted", "AbortError"))
               },
@@ -106,6 +111,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
           cancel() {
             if (ended) return
             ended = true
+            clearInterval(keepalive)
             if (state.controller === own) state.controller = undefined
           },
         })
@@ -211,6 +217,7 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
       )
       .handleAll({
         health: () => Effect.succeed({ healthy: true, version: "2.0.0", pid: 1 }),
+        config: () => Effect.succeed([]),
         reference: () =>
           Effect.succeed({
             location: {

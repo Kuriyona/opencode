@@ -15,6 +15,8 @@ import { ModelState } from "./persistence"
 import { useLanguage } from "@/runtime/i18n/language"
 import { showToast } from "@/shell/notifications/toast"
 import { formatServerError } from "./errors"
+import { useSettings } from "@/settings/model"
+import { timelinePreset } from "@opencode/session-ui/timeline/detail"
 
 export const { use: useGlobal, provider: GlobalProvider } = createSimpleContext({
   name: "Global",
@@ -103,10 +105,12 @@ function createServerController(
   projects: ReturnType<typeof createServerProjects>,
 ) {
   const language = useLanguage()
+  const settings = useSettings()
   const connKey = ServerConnection.key(conn)
   const sdk = createServerSdkContext(conn, scope)
   const source = createData({
     api: () => sdk.api,
+    initialMessageLimit: () => (timelinePreset(settings.general.timelineDetail())?.id === "compact" ? 40 : 20),
     event: {
       on: sdk.event.on,
       listen: (handler) => sdk.event.listen((event) => handler({ name: event.type, details: event })),
