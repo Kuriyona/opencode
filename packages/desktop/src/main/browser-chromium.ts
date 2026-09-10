@@ -38,6 +38,7 @@ export function createBrowserPage(
     fail: () => void
     popup: (options: Electron.BrowserWindowConstructorOptions) => WebContents
     initialize?: boolean
+    restore?: Browser.Tab
     popupOptions?: Electron.BrowserWindowConstructorOptions
   },
 ) {
@@ -57,7 +58,13 @@ export function createBrowserPage(
   const contents = view.webContents
   const detachNetwork = options.network?.attach(contents)
   contents.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown" || input.alt || !(process.platform === "darwin" ? input.meta : input.control)) return
+    if (input.type !== "keyDown") return
+    if (input.key === "F5" && !input.meta && !input.control && !input.alt && !input.shift) {
+      event.preventDefault()
+      contents.reload()
+      return
+    }
+    if (input.alt || !(process.platform === "darwin" ? input.meta : input.control)) return
     const step =
       input.key === "=" || input.key === "+" || input.code === "NumpadAdd"
         ? 0.5
@@ -82,7 +89,8 @@ export function createBrowserPage(
   let dialog: { type: string; message: string; defaultValue: string } | null = null
   let dialogURL = ""
   let dialogRevision = 0
-  let generation = 0
+  // The first restored navigation consumes the generation reserved in the unloaded inventory.
+  let generation = options.restore ? options.restore.generation - 1 : 0
   let revision = 0
   cdp.on("Page.frameNavigated", ({ frame }) => {
     documents.set(frame.id, frame.url)
@@ -242,7 +250,15 @@ export function createBrowserPage(
   })
   const ready = Promise.all([
     files.ready,
-    ...(options.initialize === false ? [] : [contents.loadURL("about:blank")]),
+    ...(options.initialize === false
+      ? []
+      : [
+          contents.loadURL(normalizeURL(options.restore?.url || "about:blank")).catch((error: Error) => {
+            if (!options.restore) throw error
+            // A dev server may have stopped while this page was unloaded. Keep its tab available to retry.
+            options.publish(error.message)
+          }),
+        ]),
     diagnostics.enable(),
     cdp.send("Page.enable"),
     cdp.send("DOM.enable"),

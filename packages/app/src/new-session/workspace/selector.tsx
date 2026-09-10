@@ -89,7 +89,7 @@ export function PromptWorkspaceSelector(props: {
         contentClass={props.onboarding ? "max-w-[280px]" : undefined}
         class="min-w-0"
       >
-        <Menu placement="bottom" gutter={4} onOpenChange={onOpenChange}>
+        <Menu placement="bottom" gutter={4} overflowPadding={24} onOpenChange={onOpenChange}>
           <Menu.Trigger
             aria-description={language.t("session.new.workspace.trigger.tooltip")}
             class="flex h-6 min-w-0 max-w-[203px] items-center gap-1.5 rounded-sm px-1.5 hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:outline-none data-[expanded]:bg-v2-overlay-simple-overlay-pressed data-[expanded]:text-v2-text-text-muted"
@@ -148,7 +148,7 @@ export function PromptWorkspaceSelector(props: {
                 <Menu.Sub
                   gutter={0}
                   overlap
-                  overflowPadding={8}
+                  overflowPadding={24}
                   onOpenChange={(open) => {
                     if (!open) {
                       focusSearch = false
@@ -177,7 +177,7 @@ export function PromptWorkspaceSelector(props: {
                     </span>
                   </Menu.SubTrigger>
                   <Menu.Portal>
-                    <Menu.SubContent class="max-h-[224px] w-[200px] overflow-y-auto">
+                    <Menu.SubContent class="max-h-[66.667dvh] w-[200px] overflow-y-auto !pb-0 [&>[data-component=menu-v2-item]:last-child]:mb-0.5 [@media(max-height:600px)]:max-h-[calc(100dvh-48px)]">
                       <Show when={props.workspaces.length >= 10}>
                         <div class="flex h-7 items-center gap-2 rounded-sm ps-3 pe-2 text-v2-icon-icon-muted">
                           <Icon name="magnifying-glass" size="small" class="shrink-0" />
@@ -242,14 +242,7 @@ export function PromptWorkspaceSelector(props: {
           class="ms-1 min-w-0 max-w-[220px]"
           contentClass="max-w-[calc(100vw-32px)] break-all"
         >
-          <Menu
-            placement="bottom"
-            gutter={4}
-            onOpenChange={(open) => {
-              onOpenChange(open)
-              if (open) requestAnimationFrame(() => branchSearchInput?.focus())
-            }}
-          >
+          <Menu placement="bottom" gutter={4} onOpenChange={onOpenChange}>
             <Menu.Trigger class="flex h-6 min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-v2-background-bg-layer-02 px-2.5 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint transition-colors hover:bg-v2-background-bg-layer-03 hover:text-v2-text-text-muted focus-visible:bg-v2-background-bg-layer-03 focus-visible:text-v2-text-text-muted focus-visible:outline-none data-[expanded]:bg-v2-background-bg-layer-03 data-[expanded]:text-v2-text-text-muted">
               <Icon name="branch-out" size="small" class="shrink-0 text-v2-icon-icon-muted" />
               <span ref={branchTruncation.observe} class="min-w-0 truncate">
@@ -258,7 +251,14 @@ export function PromptWorkspaceSelector(props: {
               <Icon name="chevron-down" size="small" class="shrink-0 text-v2-icon-icon-muted" />
             </Menu.Trigger>
             <Menu.Portal>
-              <Menu.Content class="w-[243px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-floating)] focus:outline-none">
+              <Menu.Content
+                class="w-[243px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-floating)] focus:outline-none"
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault()
+                  // Kobalte defers its list autofocus until after the focus scope opens.
+                  setTimeout(() => requestAnimationFrame(() => branchSearchInput?.focus({ preventScroll: true })))
+                }}
+              >
                 <div class="flex h-7 shrink-0 items-center gap-2 rounded-sm pl-3 pr-2.5 text-v2-icon-icon-muted">
                   <Icon name="magnifying-glass" size="small" class="shrink-0" />
                   <input

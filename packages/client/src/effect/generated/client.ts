@@ -94,8 +94,6 @@ import type {
   SessionBackgroundOutput,
   SessionMessageInput,
   SessionMessageOutput,
-  SessionMessageUpdateInput,
-  SessionMessageUpdateOutput,
   SessionEnvironmentInput,
   SessionEnvironmentOutput,
   SessionViewInput,
@@ -704,17 +702,6 @@ const EndpointSessionMessage = (raw: RawClient["server.session"]) => (input: Ses
     ),
   )
 
-const EndpointSessionMessageUpdate = (raw: RawClient["server.session"]) => (input: SessionMessageUpdateInput) =>
-  preserveEffect<SessionMessageUpdateOutput>()(
-    raw["session.messageUpdate"]({
-      params: { sessionID: input["sessionID"], messageID: input["messageID"] },
-      payload: { content: input["content"] },
-    }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
 const EndpointSessionEnvironment = (raw: RawClient["server.session"]) => (input: SessionEnvironmentInput) =>
   preserveEffect<SessionEnvironmentOutput>()(
     raw["session.environment"]({
@@ -776,7 +763,6 @@ const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   interrupt: EndpointSessionInterrupt(raw),
   background: EndpointSessionBackground(raw),
   message: EndpointSessionMessage(raw),
-  messageUpdate: EndpointSessionMessageUpdate(raw),
   environment: EndpointSessionEnvironment(raw),
   view: EndpointSessionView(raw),
 })
@@ -785,7 +771,7 @@ const EndpointMessageList = (raw: RawClient["server.message"]) => (input: Messag
   preserveEffect<MessageListOutput>()(
     raw["session.messages"]({
       params: { sessionID: input["sessionID"] },
-      query: { limit: input["limit"], order: input["order"], cursor: input["cursor"] },
+      query: { limit: input["limit"], order: input["order"], cursor: input["cursor"], type: input["type"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 

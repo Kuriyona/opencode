@@ -821,7 +821,6 @@ function App(props: { pair?: DialogPairCredentials }) {
         title: "Switch model",
         suggested: true,
         category: "Agent",
-        // Bias /mo toward /models over /move without changing global fuzzy scoring.
         slash: { name: "models", aliases: ["mo"] },
         run: () => {
           dialog.replace(() => <DialogModel />)
@@ -962,7 +961,7 @@ function App(props: { pair?: DialogPairCredentials }) {
             {
               name: "opencode.update",
               title: "Update OpenCode",
-              slash: { name: "update" },
+              slash: { name: "update", aliases: ["upgrade"] },
               run: () => updater.open?.("manual"),
               category: "System",
             },

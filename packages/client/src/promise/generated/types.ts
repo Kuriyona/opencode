@@ -531,6 +531,8 @@ export type SessionMessageCompactionFailed = {
   status: "failed"
   reason: "auto" | "manual"
   error: SessionStructuredError
+  cost?: MoneyUSD
+  tokens?: TokenUsageInfo
 }
 
 export type SessionProviderContext = { version: 1; provenance: SessionProviderContextProvenance; messages: JsonValue }
@@ -816,7 +818,14 @@ export type SessionCompactionFailed = {
   type: "session.compaction.failed"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
-  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
+  data: {
+    sessionID: string
+    reason: "auto" | "manual"
+    error: SessionStructuredError
+    inputID?: string
+    cost?: MoneyUSD
+    tokens?: TokenUsageInfo
+  }
 }
 
 export type SessionRevertCleared = {
@@ -1368,6 +1377,7 @@ export type ProviderInfo = {
   activation: "auto" | "enabled" | "disabled"
   package: string
   compaction?: ProviderCompaction
+  websocket?: boolean
   settings?: { [x: string]: any }
   headers?: { [x: string]: string }
   body?: { [x: string]: any }
@@ -1746,6 +1756,8 @@ export type SessionMessageCompactionCompleted = {
   summary: string
   recent: string
   providerContext?: SessionProviderContext
+  cost?: MoneyUSD
+  tokens?: TokenUsageInfo
 }
 
 export type SessionCompactionEnded = {
@@ -1763,6 +1775,8 @@ export type SessionCompactionEnded = {
     providerContext?: SessionProviderContext
     text: string
     recent: string
+    cost?: MoneyUSD
+    tokens?: TokenUsageInfo
   }
 }
 
@@ -1844,6 +1858,7 @@ export type ModelInfo = {
   compatibility?: ModelCompatibility
   package?: string
   compaction?: ProviderCompaction
+  websocket?: boolean
   settings?: { [x: string]: any }
   headers?: { [x: string]: string }
   body?: { [x: string]: any }
@@ -2020,6 +2035,7 @@ export type ConfigEntry =
         providers?: {
           [x: string]: {
             compaction?: ProviderCompaction
+            websocket?: boolean
             canonical?: string
             name?: string
             env?: Array<string>
@@ -2030,6 +2046,7 @@ export type ConfigEntry =
             models?: {
               [x: string]: {
                 compaction?: ProviderCompaction
+                websocket?: boolean
                 modelID?: string
                 family?: string
                 name?: string
@@ -2261,8 +2278,8 @@ export type SessionEventDurable =
   | SessionRevertStaged
   | SessionRevertCleared
   | SessionRevertCommitted
-  | SessionMessageContentUpdated
   | SessionUsageRecorded
+  | SessionMessageContentUpdated
 
 export type IntegrationInfo = {
   id: string
@@ -2326,7 +2343,6 @@ export type V2Event =
   | SessionRevertStaged
   | SessionRevertCleared
   | SessionRevertCommitted
-  | SessionMessageContentUpdated
   | FilesystemChanged
   | ReferenceUpdated
   | PermissionAsked
@@ -3120,6 +3136,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3129,6 +3152,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
       | {
@@ -3418,6 +3448,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3427,6 +3464,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
       | {
@@ -3716,6 +3760,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3725,6 +3776,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
       | {
@@ -4321,91 +4379,6 @@ export type SessionMessageInput = {
 
 export type SessionMessageOutput = { data: SessionMessageInfo }["data"]
 
-export type SessionMessageUpdateInput = {
-  readonly sessionID: { readonly sessionID: string; readonly messageID: string }["sessionID"]
-  readonly messageID: { readonly sessionID: string; readonly messageID: string }["messageID"]
-  readonly content: {
-    readonly content: ReadonlyArray<
-      | { readonly type: "text"; readonly text: string; readonly state?: { readonly [x: string]: JsonValue } }
-      | {
-          readonly type: "reasoning"
-          readonly text: string
-          readonly state?: { readonly [x: string]: JsonValue }
-          readonly time?: { readonly created: number; readonly completed?: number }
-        }
-      | {
-          readonly type: "tool"
-          readonly id: string
-          readonly name: string
-          readonly executed?: boolean
-          readonly providerState?: { readonly [x: string]: JsonValue }
-          readonly providerResultState?: { readonly [x: string]: JsonValue }
-          readonly state:
-            | { readonly status: "streaming"; readonly input: string }
-            | {
-                readonly status: "running"
-                readonly input: { readonly [x: string]: JsonValue }
-                readonly metadata: { readonly [x: string]: JsonValue }
-              }
-            | {
-                readonly status: "completed"
-                readonly input: { readonly [x: string]: JsonValue }
-                readonly content: readonly [
-                  (
-                    | { readonly type: "text"; readonly text: string }
-                    | {
-                        readonly type: "file"
-                        readonly uri: string
-                        readonly mime: string
-                        readonly name?: string | null
-                      }
-                  ),
-                  ...Array<
-                    | { readonly type: "text"; readonly text: string }
-                    | {
-                        readonly type: "file"
-                        readonly uri: string
-                        readonly mime: string
-                        readonly name?: string | null
-                      }
-                  >,
-                ]
-                readonly metadata?: { readonly [x: string]: JsonValue }
-              }
-            | {
-                readonly status: "error"
-                readonly input: { readonly [x: string]: JsonValue }
-                readonly error: { readonly type: string; readonly message: string; readonly status?: number }
-                readonly content?: readonly [
-                  (
-                    | { readonly type: "text"; readonly text: string }
-                    | {
-                        readonly type: "file"
-                        readonly uri: string
-                        readonly mime: string
-                        readonly name?: string | null
-                      }
-                  ),
-                  ...Array<
-                    | { readonly type: "text"; readonly text: string }
-                    | {
-                        readonly type: "file"
-                        readonly uri: string
-                        readonly mime: string
-                        readonly name?: string | null
-                      }
-                  >,
-                ]
-                readonly metadata?: { readonly [x: string]: JsonValue }
-              }
-          readonly time: { readonly created: number; readonly ran?: number; readonly completed?: number }
-        }
-    >
-  }["content"]
-}
-
-export type SessionMessageUpdateOutput = { data: SessionMessageAssistant }["data"]
-
 export type SessionEnvironmentInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly variables: { readonly variables: { readonly [x: string]: string } }["variables"]
@@ -4426,17 +4399,70 @@ export type MessageListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly cursor?: string | undefined
+    readonly type?:
+      | "agent-switched"
+      | "model-switched"
+      | "location-switched"
+      | "user"
+      | "synthetic"
+      | "system"
+      | "skill"
+      | "shell"
+      | "assistant"
+      | "compaction"
+      | undefined
   }["limit"]
   readonly order?: {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly cursor?: string | undefined
+    readonly type?:
+      | "agent-switched"
+      | "model-switched"
+      | "location-switched"
+      | "user"
+      | "synthetic"
+      | "system"
+      | "skill"
+      | "shell"
+      | "assistant"
+      | "compaction"
+      | undefined
   }["order"]
   readonly cursor?: {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly cursor?: string | undefined
+    readonly type?:
+      | "agent-switched"
+      | "model-switched"
+      | "location-switched"
+      | "user"
+      | "synthetic"
+      | "system"
+      | "skill"
+      | "shell"
+      | "assistant"
+      | "compaction"
+      | undefined
   }["cursor"]
+  readonly type?: {
+    readonly limit?: number | undefined
+    readonly order?: "asc" | "desc" | undefined
+    readonly cursor?: string | undefined
+    readonly type?:
+      | "agent-switched"
+      | "model-switched"
+      | "location-switched"
+      | "user"
+      | "synthetic"
+      | "system"
+      | "skill"
+      | "shell"
+      | "assistant"
+      | "compaction"
+      | undefined
+  }["type"]
 }
 
 export type MessageListOutput = SessionMessagesResponse
