@@ -604,10 +604,11 @@
 
   .settings-nav {
     width: 100%;
+    height: auto;
   }
 
   .settings-nav > .settings-back,
-  .settings-nav > .settings-nav-groups {
+  .settings-sidebar .settings-nav-groups[data-slot="tabs-v2-list"] {
     display: none;
   }
 
