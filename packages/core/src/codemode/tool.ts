@@ -91,21 +91,20 @@ export const create = (
               const outputFileParts = outputFiles(content)
               if (outputFileParts.length > 0)
                 yield* Ref.update(files, (items) => [...items, { index, files: outputFileParts }])
-              if (executed.output === undefined) {
-                const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
-                return text === "" ? null : text
-              }
-              // Agents assume JSON returned as text is already an object, so parse it for MCP tools without
-              // an output schema (registered as `{}`). Only objects and arrays; "42" as text stays text.
+              // Agents assume JSON returned as text is already an object. mcp.ts folds text content into
+              // `output` as a string, so parse it for MCP tools without an output schema (registered as `{}`).
               const noSchema = tool.output !== undefined && Object.keys(tool.output).length === 0
-              if (typeof executed.output !== "string" || !noSchema) return executed.output
-              const trimmed = executed.output.trimStart()
-              if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return executed.output
-              try {
-                return JSON.parse(executed.output)
-              } catch {
-                return executed.output
+              if (typeof executed.output === "string" && noSchema) {
+                const trimmed = executed.output.trimStart()
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                  try {
+                    return JSON.parse(executed.output)
+                  } catch {}
+                }
               }
+              if (executed.output !== undefined) return executed.output
+              const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+              return text === "" ? null : text
             }),
           {
             onToolCallStart: ({ index, name, input }) => {
