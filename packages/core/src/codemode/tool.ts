@@ -98,12 +98,14 @@ export const create = (
               // Agents assume JSON returned as text is already an object, so parse it for MCP tools without
               // an output schema (registered as `{}`). Only objects and arrays; "42" as text stays text.
               const noSchema = tool.output !== undefined && Object.keys(tool.output).length === 0
-              if (typeof executed.output === "string" && noSchema && /^\s*[[{]/.test(executed.output)) {
-                try {
-                  return JSON.parse(executed.output)
-                } catch {}
+              if (typeof executed.output !== "string" || !noSchema) return executed.output
+              const first = executed.output.trimStart()[0]
+              if (first !== "{" && first !== "[") return executed.output
+              try {
+                return JSON.parse(executed.output)
+              } catch {
+                return executed.output
               }
-              return executed.output
             }),
           {
             onToolCallStart: ({ index, name, input }) => {
