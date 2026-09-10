@@ -1,16 +1,8 @@
 export * as CodeModeTool from "./tool.js"
 
 import { CodeMode, Namespace, Tool, toolError } from "@opencode/codemode"
-import type {
-  Content,
-  Context,
-  Error,
-  Info,
-  Metadata,
-  Namespace as ToolNamespace,
-  Result,
-} from "@opencode/schema/tool"
-import { Effect, Option, Ref, Schema, Semaphore } from "effect"
+import type { Content, Context, Error, Info, Metadata, Namespace as ToolNamespace, Result } from "@opencode/schema/tool"
+import { Effect, Ref, Schema, Semaphore } from "effect"
 import { definition, normalizedName } from "../tool/runtime.js"
 import { CodeModeCatalog } from "./catalog.js"
 
@@ -99,14 +91,19 @@ export const create = (
               const outputFileParts = outputFiles(content)
               if (outputFileParts.length > 0)
                 yield* Ref.update(files, (items) => [...items, { index, files: outputFileParts }])
-              const texts = content.flatMap((part) => (part.type === "text" ? [part.text] : []))
-              const text = texts.join("\n")
-              const value = executed.output !== undefined ? executed.output : text === "" ? null : text
-              // Agents write code assuming JSON returned as text is already an object, so parse it for them.
-              // Only for MCP tools without an outputSchema, which register `{}` and are typed unknown here.
-              const unconstrained = tool.output !== undefined && Object.keys(tool.output).length === 0
-              if (typeof value === "string" && texts.length === 1 && unconstrained) return parseJson(value) ?? value
-              return value
+              if (executed.output === undefined) {
+                const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+                return text === "" ? null : text
+              }
+              // Agents assume JSON returned as text is already an object, so parse it for MCP tools without
+              // an output schema (registered as `{}`). Only objects and arrays; "42" as text stays text.
+              const noSchema = tool.output !== undefined && Object.keys(tool.output).length === 0
+              if (typeof executed.output === "string" && noSchema && /^\s*[[{]/.test(executed.output)) {
+                try {
+                  return JSON.parse(executed.output)
+                } catch {}
+              }
+              return executed.output
             }),
           {
             onToolCallStart: ({ index, name, input }) => {
@@ -161,13 +158,6 @@ export const create = (
         }
       }),
   } satisfies Info
-}
-
-// Only objects and arrays: "42" or "null" as text should stay text.
-const parseJson = (text: string): unknown => {
-  const trimmed = text.trimStart()
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined
-  return Option.getOrUndefined(Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))(trimmed))
 }
 
 export const catalog = (inventory: Inventory) => {
