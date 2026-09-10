@@ -99,8 +99,8 @@ export const create = (
               // an output schema (registered as `{}`). Only objects and arrays; "42" as text stays text.
               const noSchema = tool.output !== undefined && Object.keys(tool.output).length === 0
               if (typeof executed.output !== "string" || !noSchema) return executed.output
-              const first = executed.output.trimStart()[0]
-              if (first !== "{" && first !== "[") return executed.output
+              const trimmed = executed.output.trimStart()
+              if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return executed.output
               try {
                 return JSON.parse(executed.output)
               } catch {
