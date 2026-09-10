@@ -77,6 +77,23 @@ export const rejectCircularInsertion = (
   }
 }
 
+export const describeValue = (value: unknown): string => {
+  if (value === null) return "null"
+  if (Array.isArray(value)) return "an array"
+  if (value instanceof Values.Promise) return "an un-awaited Promise"
+  if (value instanceof ToolReference) return "a tool reference"
+  if (value instanceof Values.Date) return "a Date"
+  if (value instanceof Values.RegExp) return "a RegExp"
+  if (value instanceof Values.Map) return "a Map"
+  if (value instanceof Values.Set) return "a Set"
+  if (value instanceof Values.URL) return "a URL"
+  if (value instanceof Values.URLSearchParams) return "a URLSearchParams"
+  if (value instanceof CodeModeGenerator) return "a generator"
+  if (isRuntimeReference(value)) return "a function"
+  if (typeof value === "object") return "a data object"
+  return `a ${typeof value}`
+}
+
 export const typeofValue = (value: unknown): string => {
   if (
     value instanceof HostFunction ||
@@ -90,4 +107,13 @@ export const typeofValue = (value: unknown): string => {
   if (value instanceof HostNamespace) return "object"
   if (value instanceof ToolReference) return value.path.length > 0 ? "function" : "object"
   return typeof value
+}
+
+const MAX_ARRAY_LENGTH = 4_294_967_295
+
+export const parseArrayIndex = (key: string | number): number | undefined => {
+  const property = String(key)
+  if (!/^(0|[1-9]\d*)$/.test(property)) return undefined
+  const index = Number(property)
+  return index < MAX_ARRAY_LENGTH ? index : undefined
 }

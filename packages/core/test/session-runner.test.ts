@@ -20,6 +20,7 @@ import { OpenAIChat } from "@opencode/ai/protocols/openai-chat"
 import { AnthropicMessages, OpenAIResponses } from "@opencode/ai/protocols"
 import { compileRequest } from "@opencode/ai/route/client"
 import { TestLLM } from "@opencode/ai/testing"
+import type { SessionHooks } from "@opencode/plugin/effect/session"
 import { Catalog } from "@opencode/core/catalog"
 import { Database } from "@opencode/core/database/database"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
@@ -1076,6 +1077,24 @@ describe("SessionRunnerLLM", () => {
         Expected.completedTool({ id: "call-location" }, { content: [Expected.text('{"answer":"HELLO"}')] }),
       ]),
     ])
+  })
+
+  scenario("executes a tool renamed by a session context hook", function* (s) {
+    const hooks = yield* PluginHooks.Service
+    yield* hooks.register("session", "context", (event) =>
+      Effect.sync(() => {
+        event.tools.renamed_echo = event.tools.echo!
+        delete event.tools.echo
+      }),
+    )
+    yield* s.admit("Use the renamed tool")
+    yield* s.llm.push(TestLLM.tool("call-renamed", "renamed_echo", { text: "renamed" }), [])
+
+    yield* s.resume
+
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).toContain("renamed_echo")
+    expect(s.requests[0]?.tools.map((tool) => tool.name)).not.toContain("echo")
+    expect(s.executions).toEqual(["renamed"])
   })
 
   scenario("executes the tool advertised before a registry reload", function* (s) {
@@ -2393,15 +2412,16 @@ describe("SessionRunnerLLM", () => {
           model: { id: ID.make(s.currentModel.id), providerID: Provider.ID.make(s.currentModel.provider), variant },
         })
         const requestAgents: Agent.ID[] = []
-        yield* hooks.register("session", "context", (event) =>
+        const hook = (event: SessionHooks["context"]) =>
           Effect.sync(() => {
             expect(event.agent).toBe(agentID)
             expect(event.model.variant).toBe(variant)
             event.system.push(SystemPart.make("Hook-provided instructions"))
             event.tools.echo.description = "Hook-provided tool description"
-            event.generation.maxTokens = 4_000
-          }),
-        )
+            event.options.maxTokens = 4_000
+          })
+        yield* hooks.register("session", "context", hook)
+        yield* hooks.register("session", "compaction", hook)
         yield* hooks.register("session", "model.request", (event) =>
           Effect.sync(() => {
             requestAgents.push(event.agent)
@@ -2450,7 +2470,7 @@ describe("SessionRunnerLLM", () => {
           expect(compact[field]).toEqual(normal[field])
         expect(compact.toolChoice).toBeUndefined()
         expect(compact.system.map((part) => part.text)).toContain("Review the project carefully.")
-        expect(requestAgents[2]).toBe(Agent.ID.make("compaction"))
+        expect(requestAgents[2]).toBe(agentID)
         expect(s.executions).toEqual(["x".repeat(4_000)])
         expect((yield* s.messages).find((message) => message.type === "compaction")).toMatchObject({
           model: { id: s.currentModel.id, providerID: s.currentModel.provider, variant },
@@ -2565,7 +2585,7 @@ describe("SessionRunnerLLM", () => {
     expect(s.requests).toHaveLength(5)
     for (const request of s.requests) expect(request).toEqual(s.requests[0])
     expect(retries.map((event) => event.attempt)).toEqual([2, 3, 4, 5])
-    expect(retries.every((event) => event.sessionID === sessionID && event.agent === "compaction")).toBe(true)
+    expect(retries.every((event) => event.sessionID === sessionID && event.agent === "build")).toBe(true)
     expect(retries[3].decision).toEqual({ retry: true, delay: 60_000 })
     expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
       status: "completed",

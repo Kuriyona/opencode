@@ -277,15 +277,7 @@ export function PromptWorkspaceSelector(props: {
           class={summary() ? "min-w-0 w-full" : "ms-1 min-w-0 max-w-[220px]"}
           contentClass="max-w-[calc(100vw-32px)] break-all"
         >
-          <Menu
-            placement={placement()}
-            gutter={4}
-            modal={summary() ? false : undefined}
-            onOpenChange={(open) => {
-              onOpenChange(open)
-              if (open) requestAnimationFrame(() => branchSearchInput?.focus())
-            }}
-          >
+          <Menu placement={placement()} gutter={4} modal={summary() ? false : undefined} onOpenChange={onOpenChange}>
             <Menu.Trigger
               class={
                 summary()
@@ -306,7 +298,14 @@ export function PromptWorkspaceSelector(props: {
               />
             </Menu.Trigger>
             <Menu.Portal>
-              <Menu.Content class="w-[243px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-floating)] focus:outline-none">
+              <Menu.Content
+                class="w-[243px] overflow-hidden rounded-md border-0 bg-v2-background-bg-layer-01 shadow-[var(--v2-elevation-floating)] focus:outline-none"
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault()
+                  // Kobalte defers its list autofocus until after the focus scope opens.
+                  setTimeout(() => requestAnimationFrame(() => branchSearchInput?.focus({ preventScroll: true })))
+                }}
+              >
                 <div class="flex h-7 shrink-0 items-center gap-2 rounded-sm pl-3 pr-2.5 text-v2-icon-icon-muted">
                   <Icon name="magnifying-glass" size="small" class="shrink-0" />
                   <input
