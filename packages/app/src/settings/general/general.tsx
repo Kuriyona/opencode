@@ -323,6 +323,18 @@ export const SettingsGeneral: Component = () => {
         <WorkspaceDestinationSetting />
         <AutoApprovePermissionsSetting />
 
+        <SettingsRow
+          title={language.t("settings.general.row.showCustomAgents.title")}
+          description={language.t("settings.general.row.showCustomAgents.description")}
+        >
+          <div data-action="settings-show-custom-agents">
+            <Switch
+              checked={settings.general.showCustomAgents()}
+              onChange={(checked) => settings.general.setShowCustomAgents(checked)}
+            />
+          </div>
+        </SettingsRow>
+
         <TerminalPlacementSetting />
         <FollowUpBehaviorSetting />
 
@@ -376,18 +388,6 @@ export const SettingsGeneral: Component = () => {
 
       <SettingsList>
         <SettingsRow
-          title={language.t("settings.general.row.showSearch.title")}
-          description={language.t("settings.general.row.showSearch.description")}
-        >
-          <div data-action="settings-show-search">
-            <Switch
-              checked={settings.general.showSearch()}
-              onChange={(checked) => settings.general.setShowSearch(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
           title={language.t("settings.general.row.showStatus.title")}
           description={language.t("settings.general.row.showStatus.description")}
         >
@@ -395,18 +395,6 @@ export const SettingsGeneral: Component = () => {
             <Switch
               checked={settings.general.showStatus()}
               onChange={(checked) => settings.general.setShowStatus(checked)}
-            />
-          </div>
-        </SettingsRow>
-
-        <SettingsRow
-          title={language.t("settings.general.row.showCustomAgents.title")}
-          description={language.t("settings.general.row.showCustomAgents.description")}
-        >
-          <div data-action="settings-show-custom-agents">
-            <Switch
-              checked={settings.general.showCustomAgents()}
-              onChange={(checked) => settings.general.setShowCustomAgents(checked)}
             />
           </div>
         </SettingsRow>
