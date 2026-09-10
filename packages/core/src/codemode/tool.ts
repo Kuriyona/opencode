@@ -1,16 +1,8 @@
 export * as CodeModeTool from "./tool.js"
 
 import { CodeMode, Namespace, Tool, toolError } from "@opencode/codemode"
-import type {
-  Content,
-  Context,
-  Error,
-  Info,
-  Metadata,
-  Namespace as ToolNamespace,
-  Result,
-} from "@opencode/schema/tool"
-import { Effect, Ref, Schema, Semaphore } from "effect"
+import type { Content, Context, Error, Info, Metadata, Namespace as ToolNamespace, Result } from "@opencode/schema/tool"
+import { Effect, Option, Ref, Schema, Semaphore } from "effect"
 import { definition, normalizedName } from "../tool/runtime.js"
 import { CodeModeCatalog } from "./catalog.js"
 
@@ -99,9 +91,7 @@ export const create = (
               const outputFileParts = outputFiles(content)
               if (outputFileParts.length > 0)
                 yield* Ref.update(files, (items) => [...items, { index, files: outputFileParts }])
-              if (executed.output !== undefined) return executed.output
-              const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
-              return text === "" ? null : text
+              return programValue(tool, executed.output, content)
             }),
           {
             onToolCallStart: ({ index, name, input }) => {
@@ -157,6 +147,30 @@ export const create = (
       }),
   } satisfies Info
 }
+
+// The value a program receives from a tool call. A tool that declares no output shape and answers
+// with one text block that reads as a JSON object or array hands the program the parsed value; MCP
+// servers without structuredContent usually serialize JSON into text. Other text stays a string, and
+// a declared output schema is never second-guessed. Only code mode sees this; the persisted tool
+// result is unchanged.
+export const programValue = (tool: Info, output: unknown, content: ReadonlyArray<Content>): unknown => {
+  const texts = content.flatMap((part) => (part.type === "text" ? [part.text] : []))
+  const joined = texts.join("\n")
+  const fallback = output !== undefined ? output : joined === "" ? null : joined
+  if (typeof fallback !== "string" || texts.length !== 1 || declaresOutput(tool)) return fallback
+  const candidate = texts[0]!.trimStart()
+  if (!candidate.startsWith("{") && !candidate.startsWith("[")) return fallback
+  return Option.getOrElse(Schema.decodeUnknownOption(JsonText)(candidate), () => fallback)
+}
+
+const JsonText = Schema.fromJsonString(Schema.Unknown)
+
+// MCP tools without an outputSchema register with `{}`, which constrains nothing.
+const declaresOutput = (tool: Info): boolean =>
+  tool.output !== undefined && !(isPlainObject(tool.output) && Object.keys(tool.output).length === 0)
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype
 
 export const catalog = (inventory: Inventory) => {
   const pinned = new Set(
